@@ -2,6 +2,7 @@ import json
 
 from mcp.types import Tool
 from google.genai.types import Type, FunctionDeclaration, Schema
+from mcp import ClientSession
 
 _type_replacements = {
     "object": Type.OBJECT,
@@ -38,3 +39,20 @@ def convert_mcp_tool_to_genai_function_declaration(
         )
 
     return declaration
+
+
+async def create_mcp_client_tool_map(
+    mcp_client: ClientSession,
+) -> tuple[ClientSession, dict[str, FunctionDeclaration]]:
+    list_tools_result = await mcp_client.list_tools()
+    tool_mapping = {}
+    for kind, tools in list_tools_result:
+        if kind != "tools":
+            continue
+        tool_mapping.update(
+            {
+                tool.name: convert_mcp_tool_to_genai_function_declaration(tool)
+                for tool in tools
+            }
+        )
+    return mcp_client, tool_mapping

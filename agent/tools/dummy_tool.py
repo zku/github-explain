@@ -1,6 +1,10 @@
 import os
+import logging
+
 from mcp.server.fastmcp import Context, FastMCP
 
+
+logging.disable(logging.INFO)
 mcp = FastMCP("Dummy Server")
 
 
