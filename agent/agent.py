@@ -81,6 +81,7 @@ class CodeAnalysisAgent:
             keep_going = await self._step("")
 
         if self._finished:
+            console.print("\n\n")
             console.print(
                 Panel(
                     self._task_result,
@@ -155,7 +156,7 @@ class CodeAnalysisAgent:
             response_modalities=[types.Modality.TEXT],
             tool_config=types.ToolConfig(
                 function_calling_config=types.FunctionCallingConfig(
-                    mode=types.FunctionCallingConfigMode.ANY
+                    mode=types.FunctionCallingConfigMode.AUTO
                 )
             ),
         )
@@ -181,16 +182,18 @@ class CodeAnalysisAgent:
 
         # Disable warning logger about function calls and texts existing. We are handling it.
         genai_logger.disabled = True
-        if text := response.text:
-            console.print(f"[yellow][ASSISTANT][/yellow] {text}\n")
+        text = response.text
         genai_logger.disabled = False
+        
+        if text:
+            console.print(f"[yellow][ASSISTANT][/yellow] {text}\n")
 
         if not response.function_calls:
+            self._finish(text)
             return False
 
         for function_call in response.function_calls:
             result = await self._call_tool(function_call.name, function_call.args) or ""
-
             console.print(
                 Panel(
                     result,
