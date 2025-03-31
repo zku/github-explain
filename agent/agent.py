@@ -91,10 +91,11 @@ class CodeAnalysisAgent:
                 )
             )
 
-    def _finish(self, task_result: str):
+    def _finish(self, task_result: str | None):
         """Use this tool to signal the task completion."""
         self._finished = True
-        self._task_result = task_result
+        self._task_result = task_result or ""
+        return "Task complete."
 
     async def _call_tool(self, name: str, args: dict[str, Any]) -> str | None:
         """Calls the tool with the provided arguments. Asks for permission first."""
