@@ -10,5 +10,6 @@ project. Your reference manual should describe the high-level architecture and
 serve as a guide on getting familiar with the codebase.
 
 Use the provided tools and your own reasoning skills as a professional
-programmer to solve this task.
+programmer to solve this task. Before you provide a reference manual, you should
+inspect all relevant files. Do not base your manual solely on the directory structure.
 """.strip()

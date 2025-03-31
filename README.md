@@ -1,6 +1,8 @@
 Implements AI agents using Google's Gemini models with tool-calling support via MCP or in-process functions.
 
-The following contents are AI generated using the agent's `project_analysis` task.
+![example][.github/img/example.png]
+
+The following README contents are AI generated using the agent's `project_analysis` task.
 
 ## Codebase Reference Manual
 
