@@ -1,9 +1,10 @@
-import os
-import logging
+"""TODO."""
+
 import glob
+import logging
+import os
 
 from mcp.server.fastmcp import Context, FastMCP
-
 
 logging.disable(logging.INFO)
 mcp = FastMCP("Dummy Server")
