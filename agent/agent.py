@@ -48,7 +48,7 @@ def _call_model(
 def _format_args(args: dict[str, Any]) -> str:
     """Formats the function call arguments for printing."""
     result = json.dumps(args)
-    return result if len(result) < 64 else "{...}"
+    return result if len(result) < 128 else "{...}"
 
 
 class CodeAnalysisAgent:
@@ -185,7 +185,7 @@ class CodeAnalysisAgent:
         genai_logger.disabled = True
         text = response.text
         genai_logger.disabled = False
-        
+
         if text:
             console.print(f"[yellow][ASSISTANT][/yellow] {text}\n")
 

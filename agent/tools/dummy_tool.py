@@ -3,8 +3,13 @@
 import glob
 import logging
 import os
+import pathlib
+import sys
 
 from mcp.server.fastmcp import Context, FastMCP
+
+sys.path.append(str(pathlib.Path(__file__).parent.parent.parent))
+from repo.clone import downloads_directory
 
 logging.disable(logging.INFO)
 mcp = FastMCP("Dummy Server")
@@ -14,7 +19,7 @@ def _list_allowed_files() -> list[str]:
     """Returns a list of allowed files in this project."""
     return [
         p
-        for p in glob.glob("./**/*", recursive=True)
+        for p in glob.glob(f"{downloads_directory()}/**/*", recursive=True)
         if "__pycache__" not in p and "README" not in p
     ]
 

@@ -20,6 +20,8 @@ programmer to solve this task.
 - Your review must include source code.
 - Use your own critical thinking as necessary.
 - Use the available tools as necessary.
+- If the project contains many files, try to start with obvious entry points.
+- You must analyze at least 15 source code files (if there are 15 or more).
 
 On task completion, use the finish tool to provide your result.
 """.strip()
