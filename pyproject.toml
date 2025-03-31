@@ -1,10 +1,11 @@
 [project]
 name = "github-explain"
 version = "0.1.0"
-description = "Add your description here"
+description = "Explain Github codebases using Gemini AI"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "backoff>=2.2.1",
     "google-genai>=1.8.0",
     "mcp[cli]>=1.6.0",
     "rich>=14.0.0",

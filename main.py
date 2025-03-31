@@ -22,7 +22,7 @@ async def main():
     ) as (read, write):
         async with ClientSession(read, write) as session:
             await session.initialize()
-            agent = CodeAnalysisAgent(client, [session])
+            agent = CodeAnalysisAgent(client, mcp_clients=[session])
             await agent.run(project_analysis.TASK_PROMPT)
 
 

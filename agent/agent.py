@@ -3,10 +3,12 @@
 import asyncio
 import json
 import logging
-from typing import Any
+from typing import Any, Callable
 
+import backoff
 from google import genai
 from google.genai import types
+from google.genai.errors import ClientError
 from mcp import ClientSession
 from mcp.types import CallToolResult, TextContent
 from rich.console import Console
@@ -23,14 +25,49 @@ console = Console(stderr=True)
 genai_logger = logging.getLogger("google_genai.types")
 
 
+def _give_up_for_non_quota_error(error: ClientError) -> bool:
+    """Returns true if the genai.errors.ClientError is not about resource exhaustion."""
+    return error.code != 429
+
+
+@backoff.on_exception(
+    backoff.expo, ClientError, giveup=_give_up_for_non_quota_error, max_tries=3, max_time=15.0
+)
+def _call_model(
+    client: genai.Client, generation_config: types.GenerationConfig, contents: list[types.Content]
+) -> types.GenerateContentResponse:
+    """Generate content with the provided configuration and history."""
+    return client.models.generate_content(
+        model=MODEL_ID,
+        config=generation_config,
+        contents=contents,
+    )
+
+
+def _format_args(args: dict[str, Any]) -> str:
+    """Formats the function call arguments for printing."""
+    result = json.dumps(args)
+    return result if len(result) < 64 else "{...}"
+
+
 class CodeAnalysisAgent:
     """Analyzes a codebase using Gemini and the provided tools."""
 
-    def __init__(self, genai_client: genai.Client, mcp_clients: list[ClientSession]):
+    def __init__(
+        self,
+        genai_client: genai.Client,
+        mcp_clients: list[ClientSession] = [],
+        callables: list[Callable] = [],
+    ):
         """Creates a new CodeAnalysisAgent."""
         self._client = genai_client
         self._mcp_clients = mcp_clients
+        self._callables = callables + [self._finish]
         self._history: list[types.Content] = []
+        self._finished: bool = False
+        self._tool_call_count: int = 0
+        self._step_count: int = 0
+        self._task_result: str = ""
 
     async def run(self, task_prompt: str):
         """Runs the agent loop until no more function calls are required by the model."""
@@ -39,16 +76,34 @@ class CodeAnalysisAgent:
         )
 
         keep_going = await self._step(task_prompt)
-        while keep_going:
+        while keep_going and not self._finished:
             keep_going = await self._step("")
+
+        if self._finished:
+            console.print(
+                Panel(
+                    self._task_result,
+                    title="Task finished",
+                    style="yellow",
+                    subtitle=f"Steps: {self._step_count}, Tool calls: {self._tool_call_count}",
+                )
+            )
+
+    def _finish(self, task_result: str):
+        """Use this tool to signal the task completion."""
+        self._finished = True
+        self._task_result = task_result
 
     async def _call_tool(self, name: str, args: dict[str, Any]) -> str | None:
         """Calls the tool with the provided arguments. Asks for permission first."""
+        self._tool_call_count += 1
+        args_format = _format_args(args)
         allow = Prompt.ask(
             (
-                f"Allow execution of tool [red]{name}[/red] with "
-                f"arguments [purple]{json.dumps(args)}[/purple]?"
+                f"[cyan]  >> Allow execution of tool [red]{name}[/red] with "
+                f"arguments [purple]{args_format}[/purple]?[/cyan]"
             ),
+            case_sensitive=False,
             choices=["y", "n"],
             default="y",
         )
@@ -56,28 +111,51 @@ class CodeAnalysisAgent:
             return ""
 
         with Progress(
-            SpinnerColumn(),
+            SpinnerColumn("arc"),
             TextColumn("{task.description}"),
             transient=True,
             console=console,
         ) as progress:
+            progress.add_task(
+                f"Calling tool [red]{name}[/red] with arguments [purple]{args_format}[/purple]"
+            )
+            await asyncio.sleep(1.0)
             for mcp_client, tools in self._mcp_client_tools:
                 if name in tools:
-                    progress.add_task(f"Calling tool {name} with arguments {json.dumps(args)}")
                     result: CallToolResult = await mcp_client.call_tool(name, args)
                     return "\n".join(
                         content.text
                         for content in result.content
                         if isinstance(content, TextContent)
                     )
+            # Function is not provided by any MCP client. Must be a direct callable.
+            for callable in self._callables:
+                if getattr(callable, "__name__", repr(callable)) == name:
+                    result = callable(**args)
+                    if not result:
+                        return ""
+                    if isinstance(result, dict):
+                        return json.dumps(result)
+                    if isinstance(result, str):
+                        return result
+                    return f"{result}"
+            raise RuntimeError(f"Attempted to call unknown tool {name}.")
 
     async def _step(self, prompt: str) -> bool:
         """Performs one model interaction step with function calls."""
+        self._step_count += 1
         declarations = [fn for _, tools in self._mcp_client_tools for fn in tools.values()]
         generation_config = types.GenerateContentConfig(
             system_instruction="",
             temperature=1.0,
-            tools=[types.Tool(function_declarations=declarations)],
+            tools=[types.Tool(function_declarations=declarations)] + self._callables,
+            automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
+            response_modalities=[types.Modality.TEXT],
+            tool_config=types.ToolConfig(
+                function_calling_config=types.FunctionCallingConfig(
+                    mode=types.FunctionCallingConfigMode.ANY
+                )
+            ),
         )
 
         if prompt != "":
@@ -96,11 +174,8 @@ class CodeAnalysisAgent:
             console=console,
         ) as progress:
             progress.add_task("Thinking...")
-            response = self._client.models.generate_content(
-                model=MODEL_ID,
-                config=generation_config,
-                contents=self._history,
-            )
+            response = _call_model(self._client, generation_config, self._history)
+            await asyncio.sleep(1.0)
 
         # Disable warning logger about function calls and texts existing. We are handling it.
         genai_logger.disabled = True
@@ -118,7 +193,7 @@ class CodeAnalysisAgent:
                 Panel(
                     result,
                     title=f"Result from function call [purple]{function_call.name}[/purple]",
-                    subtitle=json.dumps(function_call.args),
+                    subtitle=_format_args(function_call.args),
                     style="green",
                 )
             )

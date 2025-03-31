@@ -1,4 +1,4 @@
-Implements AI agents using Google's Gemini models with tool-calling support via MCP or in-process functions.
+Implements AI agents to analyze codebases using Google's Gemini models with tool-calling support via MCP or in-process functions.
 
 ![example](.github/img/example.png)
 
