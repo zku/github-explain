@@ -19,6 +19,7 @@ from rich.prompt import Prompt
 from .mcp_utils import create_mcp_client_tool_map
 
 MODEL_ID = "gemini-2.0-flash"
+REQUIRE_TOOL_CALL_APPROVAL = False
 
 
 console = Console(stderr=True)
@@ -98,17 +99,18 @@ class CodeAnalysisAgent:
         """Calls the tool with the provided arguments. Asks for permission first."""
         self._tool_call_count += 1
         args_format = _format_args(args)
-        allow = Prompt.ask(
-            (
-                f"[cyan]  >> Allow execution of tool [red]{name}[/red] with "
-                f"arguments [purple]{args_format}[/purple]?[/cyan]"
-            ),
-            case_sensitive=False,
-            choices=["y", "n"],
-            default="y",
-        )
-        if allow != "y":
-            return ""
+        if REQUIRE_TOOL_CALL_APPROVAL:
+            allow = Prompt.ask(
+                (
+                    f"[cyan]  >> Allow execution of tool [red]{name}[/red] with "
+                    f"arguments [purple]{args_format}[/purple]?[/cyan]"
+                ),
+                case_sensitive=False,
+                choices=["y", "n"],
+                default="y",
+            )
+            if allow != "y":
+                return ""
 
         with Progress(
             SpinnerColumn("arc"),
@@ -119,7 +121,7 @@ class CodeAnalysisAgent:
             progress.add_task(
                 f"Calling tool [red]{name}[/red] with arguments [purple]{args_format}[/purple]"
             )
-            await asyncio.sleep(1.0)
+            await asyncio.sleep(0.3)
             for mcp_client, tools in self._mcp_client_tools:
                 if name in tools:
                     result: CallToolResult = await mcp_client.call_tool(name, args)
