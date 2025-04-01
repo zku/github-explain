@@ -5,7 +5,7 @@ import json
 import logging
 from typing import Any, Callable
 
-import backoff
+import rich
 from google import genai
 from google.genai import types
 from google.genai.errors import ClientError
@@ -18,31 +18,48 @@ from rich.prompt import Prompt
 
 from .mcp_utils import create_mcp_client_tool_map
 
-MODEL_ID = "gemini-2.0-flash"
+DEBUG = True
 REQUIRE_TOOL_CALL_APPROVAL = False
+MODEL_ID = "gemini-2.0-flash"
+# MODEL_ID = "gemini-2.5-pro-exp-03-25"
 
 
 console = Console(stderr=True)
 genai_logger = logging.getLogger("google_genai.types")
 
 
-def _give_up_for_non_quota_error(error: ClientError) -> bool:
-    """Returns true if the genai.errors.ClientError is not about resource exhaustion."""
-    return error.code != 429
-
-
-@backoff.on_exception(
-    backoff.expo, ClientError, giveup=_give_up_for_non_quota_error, max_tries=3, max_time=15.0
-)
-def _call_model(
+async def _call_model(
     client: genai.Client, generation_config: types.GenerationConfig, contents: list[types.Content]
 ) -> types.GenerateContentResponse:
     """Generate content with the provided configuration and history."""
-    return client.models.generate_content(
-        model=MODEL_ID,
-        config=generation_config,
-        contents=contents,
-    )
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[purple]{task.description}[/purple]"),
+        transient=True,
+        console=console,
+    ) as progress:
+        last_error = None
+        for attempt in range(3):
+            progress.add_task(f"Thinking [{attempt+1}/3]...")
+            try:
+                response = client.models.generate_content(
+                    model=MODEL_ID,
+                    config=generation_config,
+                    contents=contents,
+                )
+                await asyncio.sleep(1.0)
+                return response
+            except ClientError as error:
+                last_error = error
+                if error.code != 429:
+                    raise error
+                for detail in error.details["error"]["details"]:
+                    if "retryDelay" in detail:
+                        retryDelayText = int(detail["retryDelay"][:-1]) + 2 ** (attempt + 1)
+                        progress.add_task(f"Waiting {retryDelayText} second(s) for quota...")
+                        await asyncio.sleep(retryDelayText)
+                        break
+        raise last_error
 
 
 def _format_args(args: dict[str, Any]) -> str:
@@ -76,9 +93,9 @@ class CodeAnalysisAgent:
             *(create_mcp_client_tool_map(mcp_client) for mcp_client in self._mcp_clients)
         )
 
-        keep_going = await self._step(task_prompt)
-        while keep_going and not self._finished:
-            keep_going = await self._step("")
+        await self._step(task_prompt)
+        while not self._finished:
+            await self._step("")
 
         if self._finished:
             console.print("\n\n")
@@ -90,6 +107,10 @@ class CodeAnalysisAgent:
                     subtitle=f"Steps: {self._step_count}, Tool calls: {self._tool_call_count}",
                 )
             )
+
+        if DEBUG:
+            with open("transcript.txt", "w") as f:
+                rich.inspect(self._history, console=Console(file=f))
 
     def _finish(self, task_result: str | None):
         """Use this tool to signal the task completion."""
@@ -145,7 +166,7 @@ class CodeAnalysisAgent:
                     return f"{result}"
             raise RuntimeError(f"Attempted to call unknown tool {name}.")
 
-    async def _step(self, prompt: str) -> bool:
+    async def _step(self, prompt: str):
         """Performs one model interaction step with function calls."""
         self._step_count += 1
         declarations = [fn for _, tools in self._mcp_client_tools for fn in tools.values()]
@@ -171,29 +192,34 @@ class CodeAnalysisAgent:
                 )
             )
 
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[purple]{task.description}[/purple]"),
-            transient=True,
-            console=console,
-        ) as progress:
-            progress.add_task("Thinking...")
-            response = _call_model(self._client, generation_config, self._history)
-            await asyncio.sleep(1.0)
+        response = await _call_model(self._client, generation_config, self._history)
 
         # Disable warning logger about function calls and texts existing. We are handling it.
         genai_logger.disabled = True
         text = response.text
         genai_logger.disabled = False
 
+        if not text and not response.function_calls:
+            # Received STOP for some reason. Keep going with some words of encouragement.
+            self._history.append(
+                types.Content(
+                    role="user",
+                    parts=[
+                        types.Part(
+                            text=(
+                                "Good progress so far! Please continue with your task or "
+                                "call the finish tool to submit your result."
+                            )
+                        )
+                    ],
+                )
+            )
+
         if text:
+            self._history.append(types.Content(role="model", parts=[types.Part(text=text)]))
             console.print(f"[yellow][ASSISTANT][/yellow] {text}\n")
 
-        if not response.function_calls:
-            self._finish(text)
-            return False
-
-        for function_call in response.function_calls:
+        for function_call in response.function_calls or []:
             result = await self._call_tool(function_call.name, function_call.args) or ""
             console.print(
                 Panel(
@@ -223,6 +249,3 @@ class CodeAnalysisAgent:
                     ],
                 )
             )
-
-        # We had function calls. Keep going.
-        return True

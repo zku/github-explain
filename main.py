@@ -3,7 +3,6 @@
 import argparse
 import asyncio
 import os
-import shutil
 
 from google import genai
 from mcp import ClientSession, StdioServerParameters
@@ -13,7 +12,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from agent.agent import CodeAnalysisAgent
 from agent.prompts import project_analysis
-from repo.clone import clone_repo, downloads_directory
+from repo.clone import clone_repo
 
 parser = argparse.ArgumentParser("simple_example")
 parser.add_argument("--repo", help="Name of the Github repo.", type=str)
