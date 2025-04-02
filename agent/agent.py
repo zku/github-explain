@@ -110,7 +110,7 @@ class CodeAnalysisAgent:
 
         if DEBUG:
             with open("transcript.txt", "w") as f:
-                rich.inspect(self._history, console=Console(file=f))
+                rich.inspect(self._history, all=True, console=Console(file=f))
 
     def _finish(self, task_result: str | None):
         """Use this tool to signal the task completion."""
