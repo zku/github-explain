@@ -4,92 +4,85 @@ Implements AI agents to analyze codebases using Google's Gemini models with tool
 
 The following README contents are AI generated using the agent's `project_analysis` task.
 
-## Codebase Reference Manual
+## Reference Manual: Codebase Analysis Agent
 
-This document provides a high-level overview of the codebase and serves as a guide for understanding
-the project's architecture.
+This document provides a reference manual for understanding the architecture of the codebase analysis agent. It serves as a guide for developers who want to understand the project and contribute to its development.
 
-### 1. Project Description
+### High-Level Architecture
 
-The project appears to be a code analysis agent that uses Google's Gemini AI model to analyze a
-codebase. It leverages the `mcp` (Modular Code Platform) library for interacting with external tools
-and the `genai` library for interacting with the Gemini model. The agent aims to automate code
-understanding and potentially code modification tasks.
+The project aims to create an AI agent that can analyze a given codebase and generate a reference manual. The agent utilizes the Google Gemini API for reasoning and decision-making, and it employs a set of tools to gather information about the codebase. The architecture can be
+broken down into the following components:
 
-### 2. High-Level Architecture
+1.  **Main Entry Point (`main.py`):** This script parses command-line arguments (specifically the repository name), clones the specified repository using a Docker container, initializes the Gemini client and the MCP client, creates a `CodeAnalysisAgent`, and starts the agent's
+execution.
 
-The project consists of the following main components:
+2.  **Code Analysis Agent (`agent/agent.py`):** This class is the core of the application. It manages the interaction with the Gemini model and the execution of tools. The agent receives a task prompt, interacts with the Gemini model, processes the model's responses (including
+text and function calls), and calls tools to gather more information. The agent maintains a history of interactions with the model and uses it to guide its analysis.
 
-*   **`main.py`**: This is the entry point of the application. It initializes the Gemini client and
-the MCP client (a dummy tool server for now). It then creates a `CodeAnalysisAgent` and starts the
-analysis process by providing an initial task prompt.
-*   **`agent/agent.py`**: This file contains the core logic of the `CodeAnalysisAgent`. The agent
-interacts with the Gemini model, manages the conversation history, calls tools through the MCP
-client, and presents the results to the user. The agent operates in a loop, prompting the model,
-processing the response (which may include tool calls), and updating the conversation history.
-*   **`agent/tools/dummy_tool.py`**: This is a dummy implementation of a tool server using the MCP
-library. It provides two tools: `list_files` (lists files in the project) and `read_file` (reads the
-content of a file). This is a simple, file-system based tool and will likely be replaced with a more
-sophisticated tool that interacts with the cloned GitHub project.
-*   **`agent/prompts/`**: This directory contains prompt files used by the agent.
-`project_analysis.py` likely contains the initial task prompt given to the agent.
+3.  **QA Agent (`agent/qa_agent.py`):** This module allows for interactive question answering about the codebase. It takes a `CodeAnalysisAgent` and an initial prompt, runs the agent with the prompt, and then prompts the user for questions. It feeds those questions to the agent
+allowing it to explore the codebase based on user input.
 
-### 3. Key Components and Their Functionality
+4.  **Repository Cloning (`repo/clone.py`):** This module handles the cloning of the target repository. It uses Docker to create an isolated environment for the `git clone` command. The repository is cloned into a shared volume, making it accessible to the agent.
 
-*   **`CodeAnalysisAgent`**:
-    *   Takes a `genai.Client` and a list of `ClientSession` (MCP clients) as input.
-    *   `run(task_prompt)`: Starts the agent loop with an initial task prompt.
-    *   `_step(prompt)`: Performs one interaction step with the Gemini model:
-        *   Adds the user prompt to the conversation history.
-        *   Calls the Gemini model to generate a response.
-        *   If the response contains function calls, calls the corresponding tools using the MCP
-client and adds the results to the history.
-    *   `_call_tool(name, args)`: Calls a specific tool through the MCP client. It asks the user for
-permission before executing the tool.
-*   **MCP (Modular Code Platform)**:
-    *   Provides a framework for defining and calling tools.
-    *   `dummy_tool.py` defines a simple MCP server with two tools: `list_files` and `read_file`.
-    *   The agent interacts with these tools through `ClientSession`.
-*   **Gemini API**:
-    *   Used for interacting with the Gemini language model.
-    *   The agent sends prompts and conversation history to the model.
-    *   The model generates responses, which may include text and/or function calls.
+5.  **MCP (Message Context Protocol) Tools (`agent/tools/dummy_tool.py`):** This component provides tools for the agent to interact with the file system. It includes tools for listing files and reading file content. The MCP server restricts access to only the files within
+the cloned repository, preventing the agent from accessing arbitrary files.
 
-### 4. Workflow
+6.  **MCP Utilities (`agent/mcp_utils.py`):** This module contains utility functions for working with MCP clients and tools. It provides functions for converting MCP tool descriptions to Google Gemini function declarations, making it possible to seamlessly integrate MCP tools
+with the Gemini model.
 
-1.  The `main.py` script initializes the Gemini client and the MCP client (dummy tool server).
-2.  It creates an instance of the `CodeAnalysisAgent`, passing in the Gemini client and MCP client.
-3.  It calls the `run` method of the agent, providing an initial task prompt (from
-`agent/prompts/project_analysis.py`).
-4.  The `run` method enters a loop:
-    *   The `_step` method is called, which sends the prompt to the Gemini model.
-    *   The model generates a response.
-    *   If the response contains function calls, the agent calls the corresponding tools using the
-MCP client.
-    *   The results of the tool calls are added back to the conversation history.
-    *   The loop continues until the model no longer requests function calls.
+7.  **Prompts (`agent/prompts/project_analysis.py`):** This module defines the prompts used to guide the agent's behavior. The `TASK_PROMPT` variable contains the initial prompt that instructs the agent to analyze the codebase and generate a reference manual.
 
-### 5. Getting Started
+### Codebase Structure
 
-To understand the codebase, start by examining the following files:
+The project's directory structure is organized as follows:
 
-*   `main.py`: To understand the application's entry point and initialization process.
-*   `agent/agent.py`: To understand the core logic of the code analysis agent.
-*   `agent/tools/dummy_tool.py`: To understand how tools are defined and called using the MCP
-library.
-*   `agent/prompts/project_analysis.py`: To understand the initial task prompt given to the agent.
+```
+.
+├── LICENSE
+├── main.py
+├── pyproject.toml
+├── uv.lock
+├── agent/
+│   ├── __init__.py
+│   ├── agent.py
+│   ├── mcp_utils.py
+│   ├── qa_agent.py
+│   ├── prompts/
+│   │   ├── __init__.py
+│   │   ├── project_analysis.py
+│   └── tools/
+│       ├── __init__.py
+│       ├── dummy_tool.py
+├── repo/
+│   ├── __init__.py
+│   ├── clone.py
+│   ├── Dockerfile
+```
 
-### 6. Future Development Areas
+### Key Components and Their Interactions
 
-Based on the code and the "TODO" comments, here are potential future development areas:
+The following diagram illustrates the interactions between the key components of the project:
 
-*   **GitHub Project Cloning**: Implement the functionality to clone a GitHub project (without
-submodules and with empty LFS filters) inside a Docker container.
-*   **File Server**: Replace the dummy tool server with a read-only file server that serves files
-from the cloned GitHub project.
-*   **Tool Development**: Create more sophisticated tools for code analysis and modification.
-*   **Error Handling**: Improve error handling and logging.
-*   **Prompt Engineering**: Improve the prompts in `agent/prompts/` to guide the agent towards more
-effective code analysis.
-*   **Security**: Address security concerns related to code execution and data access, especially
-when dealing with external codebases.
+```
++-----------------+      +---------------------+      +-----------------------+
+|    main.py      |----->| CodeAnalysisAgent   |----->|   Google Gemini API   |
++-----------------+      | (agent/agent.py)    |      +-----------------------+
+                       |                     |
+                       |      +-------+      |
+                       |----->| Tools |----->|
+                       |      +-------+      |
+                       |        (MCP)        |
+                       +---------------------+
+```
+
+### Getting Familiar with the Codebase
+
+To get started with the codebase, follow these steps:
+
+1.  **Understand the `main.py` script:** This is the entry point of the application. It initializes the necessary components and starts the agent's execution.
+2.  **Explore the `CodeAnalysisAgent` class:** This class is the core of the application. Understand how it interacts with the Gemini model and the available tools.
+3.  **Examine the `repo/clone.py` module:** This module handles the cloning of the target repository. Understand how it uses Docker to create an isolated environment for the `git clone` command.
+4.  **Investigate the MCP tools:** The `agent/tools/dummy_tool.py` module provides tools for interacting with the file system. Understand how these tools are used by the agent to gather information about the codebase.
+5.  **Review the prompts:** The `agent/prompts/project_analysis.py` module defines the prompts that guide the agent's behavior.
+
+This reference manual provides a comprehensive overview of the codebase analysis agent. By understanding the architecture and key components of the project, developers can effectively contribute to its development and improvement.

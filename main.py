@@ -12,6 +12,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from agent.agent import CodeAnalysisAgent
 from agent.prompts import project_analysis
+from agent.qa_agent import qa_agent
 from repo.clone import clone_repo
 
 parser = argparse.ArgumentParser("simple_example")
@@ -35,7 +36,7 @@ async def main():
         async with ClientSession(read, write) as session:
             await session.initialize()
             agent = CodeAnalysisAgent(client, mcp_clients=[session])
-            await agent.run(project_analysis.TASK_PROMPT)
+            await qa_agent(agent, project_analysis.TASK_PROMPT)
 
 
 if __name__ == "__main__":
