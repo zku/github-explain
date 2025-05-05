@@ -67,12 +67,12 @@ The following diagram illustrates the interactions between the key components of
 +-----------------+      +---------------------+      +-----------------------+
 |    main.py      |----->| CodeAnalysisAgent   |----->|   Google Gemini API   |
 +-----------------+      | (agent/agent.py)    |      +-----------------------+
-                       |                     |
-                       |      +-------+      |
-                       |----->| Tools |----->|
-                       |      +-------+      |
-                       |        (MCP)        |
-                       +---------------------+
+                         |                     |
+                         |      +-------+      |
+                         |----->| Tools |----->|
+                         |      +-------+      |
+                         |        (MCP)        |
+                         +---------------------+
 ```
 
 ### Getting Familiar with the Codebase
